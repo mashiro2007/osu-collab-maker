@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>collab-maker</title>
+  <meta name="description" content="collab-maker：快速制作一张 collab 图，为图片中的每个玩家添加可自由调整位置、大小与样式的专属签名，并导出高清图片。所有处理均在本地完成。" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><img src="assets/osu-logo-white.svg" alt="" /></div>
+        <div class="brand-text">
+          <div class="brand-title-row">
+            <h1>collab-maker</h1>
+            <a class="brand-author" href="https://osu.ppy.sh/users/30198679" target="_blank" rel="noopener noreferrer" title="mashiro 的 osu! 主页">by mashiro</a>
+          </div>
+          <p>快速制作一张collab图</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span class="privacy"><i class="dot"></i>本地处理 · 不上传</span>
+        <button id="btnImport" class="btn btn-ghost" type="button">导入图片</button>
+        <button id="btnExportTop" class="btn btn-primary" type="button" disabled>导出图片</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="stage-shell">
+        <div id="stage" class="stage">
+          <canvas id="stageCanvas" aria-label="照片与签名预览" hidden></canvas>
+
+          <div id="emptyState" class="empty-state">
+            <div class="empty-art" aria-hidden="true">
+              <svg viewBox="0 0 120 96" fill="none">
+                <rect x="7" y="14" width="92" height="66" rx="10" stroke="currentColor" stroke-width="1.6"/>
+                <circle cx="38" cy="39" r="8.5" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M24 63c1.6-9.6 8-14.4 14-14.4S50.4 53.4 52 63" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <circle cx="68" cy="43" r="6.6" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M58 63c1-7.6 5.7-11.4 10-11.4s9 3.8 10 11.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M71 79c8.4-2 15.4-7.2 22-17 3.7-5.7 9-8.4 14-7.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M96.5 55.5l8 3.3-6.4 6.1-4.8-4.3 3.2-5.1z" fill="currentColor" opacity=".85"/>
+              </svg>
+            </div>
+            <h2>把照片拖到这里</h2>
+            <p>支持 JPG / PNG / WebP，建议使用原图以获得最佳导出画质</p>
+            <div class="empty-actions">
+              <button id="btnPick" class="btn btn-primary" type="button">选择一张照片</button>
+            </div>
+            <span class="empty-note">图片只在你的浏览器里处理，不会上传到任何服务器</span>
+          </div>
+
+          <div id="stageTopline" class="stage-topline" hidden>
+            <span id="stageBadge" class="badge"></span>
+            <button id="btnCompare" class="chip-btn" type="button">按住查看原图</button>
+          </div>
+
+          <div id="stageFooter" class="stage-footer" hidden>
+            <span>拖动签名移动</span><i class="sep"></i><span>拖动角点缩放</span><i class="sep"></i><span>拖动圆点旋转</span><i class="sep"></i><span>滚轮调大小</span>
+          </div>
+
+          <div class="drop-hint" aria-hidden="true"><span>松手即可载入照片</span></div>
+        </div>
+      </section>
+
+      <aside class="panel" aria-label="编辑面板">
+        <div class="panel-scroll">
+
+          <section class="group">
+            <header class="group-head">
+              <span class="num">01</span>
+              <h2>底图</h2>
+              <button id="btnReplace" class="link-btn" type="button" disabled>更换</button>
+            </header>
+            <div class="file-info is-empty" id="fileInfo">
+              <div class="file-thumb" id="fileThumb"></div>
+              <div class="file-text">
+                <strong id="fileName">尚未导入照片</strong>
+                <span id="fileDims">支持 JPG / PNG / WebP</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="group">
+            <header class="group-head">
+              <span class="num">02</span>
+              <h2>人物签名</h2>
+              <button id="btnAddSig" class="link-btn" type="button" title="为照片中的另一位人物添加签名">＋ 添加人物</button>
+            </header>
+
+            <div class="sig-list" id="sigList" aria-label="签名列表"></div>
+
+            <div class="segmented" id="typeTabs" role="tablist" aria-label="签名类型">
+              <button type="button" data-type="text" class="is-active" role="tab" aria-selected="true">文字</button>
+              <button type="button" data-type="draw" role="tab" aria-selected="false">手写</button>
+              <button type="button" data-type="image" role="tab" aria-selected="false">图片</button>
+            </div>
+
+            <div class="pane" data-pane="text">
+              <label class="field">
+                <span class="field-top"><span>签名内容</span><span class="counter" id="textCount">0 / 40</span></span>
+                <textarea id="signText" rows="2" maxlength="40" placeholder="输入名字，回车可换行"></textarea>
+              </label>
+
+              <div class="field">
+                <span class="field-top">
+                  <span>字体</span>
+                  <button id="btnFont" class="link-btn" type="button" title="支持 TTF / OTF / WOFF">上传字体</button>
+                </span>
+                <div class="select-wrap">
+                  <select id="fontSelect" aria-label="签名字体"></select>
+                </div>
+              </div>
+
+              <div class="preset-row" id="presetRow">
+                <button type="button" data-preset="ink">白墨</button>
+                <button type="button" data-preset="black">墨黑</button>
+                <button type="button" data-preset="gold">烫金</button>
+                <button type="button" data-preset="minimal">极简</button>
+              </div>
+
+              <div class="field">
+                <span class="field-top"><span>颜色</span><span class="hint mono" id="colorHex">#FFFFFF</span></span>
+                <div class="color-row">
+                  <div class="swatches" id="swatches">
+                    <button type="button" class="swatch" data-color="#ffffff" style="--c:#ffffff" title="白色" aria-label="白色"></button>
+                    <button type="button" class="swatch" data-color="#f2d79f" style="--c:#f2d79f" title="香槟金" aria-label="香槟金"></button>
+                    <button type="button" class="swatch" data-color="#c8a15a" style="--c:#c8a15a" title="古铜金" aria-label="古铜金"></button>
+                    <button type="button" class="swatch" data-color="#15120f" style="--c:#15120f" title="墨黑" aria-label="墨黑"></button>
+                    <button type="button" class="swatch" data-color="#a83232" style="--c:#a83232" title="朱红" aria-label="朱红"></button>
+                  </div>
+                  <input type="color" id="textColor" value="#ffffff" aria-label="自定义签名颜色" />
+                  <button class="icon-btn" id="btnEyedropper" type="button" title="从照片中吸取颜色">吸管</button>
+                </div>
+              </div>
+
+              <button type="button" class="more-toggle" id="moreToggle" aria-expanded="false">
+                <span>更多样式</span>
+                <small>字距 · 描边 · 投影 · 底板</small>
+                <i class="chev" aria-hidden="true"></i>
+              </button>
+              <div class="more-styles" id="moreStyles" hidden>
+
+              <label class="field">
+                <span class="field-top"><span>字距</span><b id="spacingVal">2</b></span>
+                <input type="range" id="spacingRange" min="0" max="20" step="1" value="2" />
+              </label>
+
+              <div class="row row-tight">
+                <button class="toggle" id="boldBtn" type="button" title="加粗" aria-pressed="false"><b>B</b></button>
+                <button class="toggle" id="italicBtn" type="button" title="斜体" aria-pressed="false"><i>I</i></button>
+                <span class="hint">字形</span>
+              </div>
+
+              <div class="style-block">
+                <label class="check"><input type="checkbox" id="strokeOn" checked /><span>描边</span></label>
+                <div class="inline-controls" id="strokeControls">
+                  <input type="color" id="strokeColor" value="#111111" aria-label="描边颜色" />
+                  <input type="range" id="strokeWidth" min="0" max="12" step="0.5" value="3.5" aria-label="描边粗细" />
+                  <b class="mono" id="strokeWidthVal">3.5</b>
+                </div>
+              </div>
+
+              <div class="style-block">
+                <label class="check"><input type="checkbox" id="shadowOn" checked /><span>投影</span></label>
+                <span class="hint">让签名在复杂背景上更清晰</span>
+              </div>
+
+              <div class="style-block">
+                <label class="check"><input type="checkbox" id="plateOn" /><span>底板</span></label>
+                <div class="inline-controls" id="plateControls" hidden>
+                  <input type="color" id="plateColor" value="#000000" aria-label="底板颜色" />
+                  <input type="range" id="plateOpacity" min="5" max="90" step="1" value="40" aria-label="底板透明度" />
+                  <b class="mono" id="plateOpacityVal">40%</b>
+                </div>
+              </div>
+
+              </div>
+
+              <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf" hidden />
+            </div>
+
+            <div class="pane" data-pane="draw" hidden>
+              <div class="pad-wrap">
+                <canvas id="padCanvas" width="840" height="350"></canvas>
+                <div class="pad-placeholder" id="padPlaceholder">在这里手写你的签名</div>
+              </div>
+              <div class="pad-actions">
+                <button id="btnPadUndo" class="btn btn-mini" type="button">撤销一笔</button>
+                <button id="btnPadClear" class="btn btn-mini" type="button">全部清空</button>
+                <span class="hint" id="padCount">0 笔</span>
+              </div>
+              <div class="row">
+                <label class="field field-half">
+                  <span>笔色</span>
+                  <input type="color" id="penColor" value="#ffffff" aria-label="笔色" />
+                </label>
+                <label class="field field-half">
+                  <span>笔触 <b id="penWidthVal">8</b></span>
+                  <input type="range" id="penWidth" min="3" max="18" step="1" value="8" aria-label="笔触粗细" />
+                </label>
+              </div>
+              <p class="note">手写内容会以透明背景叠加到照片上，可拖拽调整位置与大小。</p>
+            </div>
+
+            <div class="pane" data-pane="image" hidden>
+              <button class="upload-tile" id="btnSigImage" type="button">
+                <strong>上传签名图片</strong>
+                <span>推荐透明背景 PNG，自动裁掉空白</span>
+              </button>
+              <div class="sig-image-card" id="sigImageCard" hidden>
+                <div class="sig-thumb"><canvas id="sigThumb" width="240" height="140"></canvas></div>
+                <div class="sig-image-meta">
+                  <strong id="sigImgName">签名.png</strong>
+                  <span id="sigImgSize">—</span>
+                </div>
+                <button class="icon-btn" id="btnSigImageClear" type="button" title="移除签名图片">×</button>
+              </div>
+              <label class="check mt-10"><input type="checkbox" id="whiteCut" /><span>去除白色背景</span></label>
+              <label class="field" id="whiteField">
+                <span class="field-top"><span>去底强度</span><b id="whiteVal">55</b></span>
+                <input type="range" id="whiteStrength" min="0" max="100" step="1" value="55" disabled aria-label="去底强度" />
+              </label>
+              <p class="note">适合白纸上的手写签名或扫描件；载入后会自动裁掉透明边缘。</p>
+              <input type="file" id="sigImageFile" accept="image/png,image/webp,image/jpeg" hidden />
+            </div>
+          </section>
+
+          <section class="group">
+            <header class="group-head">
+              <span class="num">03</span>
+              <h2>位置与大小</h2>
+              <button id="btnResetPos" class="link-btn" type="button">重置</button>
+            </header>
+
+            <div class="place-top">
+              <div class="pos-grid" id="posGrid" aria-label="快速定位">
+                <button type="button" data-pos="tl" title="左上"></button>
+                <button type="button" data-pos="tc" title="上中"></button>
+                <button type="button" data-pos="tr" title="右上"></button>
+                <button type="button" data-pos="ml" title="左中"></button>
+                <button type="button" data-pos="mc" title="居中"></button>
+                <button type="button" data-pos="mr" title="右中"></button>
+                <button type="button" data-pos="bl" title="左下"></button>
+                <button type="button" data-pos="bc" title="下中"></button>
+                <button type="button" data-pos="br" title="右下"></button>
+              </div>
+              <div class="place-copy">
+                <strong>相对画布定位</strong>
+                <span>位置按百分比记录，换分辨率也不会跑位。</span>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <label class="field">
+                <span class="field-top"><span>水平 X</span><b id="posXVal">80%</b></span>
+                <input type="range" id="posX" min="0" max="100" step="0.5" value="80" aria-label="水平位置" />
+              </label>
+              <label class="field">
+                <span class="field-top"><span>垂直 Y</span><b id="posYVal">86%</b></span>
+                <input type="range" id="posY" min="0" max="100" step="0.5" value="86" aria-label="垂直位置" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span class="field-top"><span>大小（占画面高度）</span><b id="sizeVal">8.5%</b></span>
+              <input type="range" id="sizeRange" min="2" max="40" step="0.5" value="8.5" aria-label="签名大小" />
+            </label>
+
+            <div class="grid-2">
+              <label class="field">
+                <span class="field-top"><span>旋转</span><b id="rotVal">0°</b></span>
+                <input type="range" id="rotRange" min="-45" max="45" step="1" value="0" aria-label="旋转角度" />
+              </label>
+              <label class="field">
+                <span class="field-top"><span>不透明度</span><b id="opacityVal">100%</b></span>
+                <input type="range" id="opacityRange" min="10" max="100" step="1" value="100" aria-label="不透明度" />
+              </label>
+            </div>
+
+            <p class="note">点击照片上的签名即可切换；拖动调整位置，按住 Shift 旋转可吸附到 15°。</p>
+          </section>
+
+          <section class="group">
+            <header class="group-head">
+              <span class="num">04</span>
+              <h2>导出</h2>
+              <span class="head-hint" id="exportDimHint">—</span>
+            </header>
+
+            <div class="segmented segmented-3" id="formatTabs" role="tablist" aria-label="导出格式">
+              <button type="button" data-format="png" class="is-active" role="tab" aria-selected="true">PNG</button>
+              <button type="button" data-format="jpeg" role="tab" aria-selected="false">JPG</button>
+              <button type="button" data-format="webp" role="tab" aria-selected="false">WebP</button>
+            </div>
+
+            <div class="scale-row" id="scaleChips" aria-label="导出倍率">
+              <button type="button" data-scale="1" class="is-active">原始尺寸</button>
+              <button type="button" data-scale="2">2×</button>
+              <button type="button" data-scale="3">3×</button>
+            </div>
+
+            <label class="field" id="qualityField" hidden>
+              <span class="field-top"><span>画质</span><b id="qualityVal">92</b></span>
+              <input type="range" id="quality" min="50" max="100" step="1" value="92" aria-label="导出画质" />
+            </label>
+
+            <label class="field">
+              <span>文件名</span>
+              <div class="filename-wrap">
+                <input type="text" id="exportName" maxlength="40" value="落款" aria-label="导出文件名" />
+                <span class="mono" id="extLabel">.png</span>
+              </div>
+            </label>
+
+            <button id="btnExport" class="btn btn-primary btn-block" type="button" disabled>导出图片</button>
+            <p class="export-note" id="exportNote">导入照片后可导出</p>
+            <p class="privacy-note">全部处理都在本地完成，照片不会离开这台设备。</p>
+          </section>
+
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/*" hidden />
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
